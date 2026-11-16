@@ -19,10 +19,18 @@ import (
 
 // Config is the proxy configuration (litellm proxy config.yaml shape).
 type Config struct {
-	ModelList []ModelEntry              `yaml:"model_list" json:"model_list"`
-	Server    ServerSettings            `yaml:"server" json:"server"`
-	Router    RouterSettings            `yaml:"router_settings" json:"router_settings"`
-	ModelCost map[string]cost.ModelCost `yaml:"model_cost" json:"model_cost"`
+	ModelList       []ModelEntry              `yaml:"model_list" json:"model_list"`
+	Server          ServerSettings            `yaml:"server" json:"server"`
+	Router          RouterSettings            `yaml:"router_settings" json:"router_settings"`
+	GeneralSettings GeneralSettings           `yaml:"general_settings" json:"general_settings"`
+	ModelCost       map[string]cost.ModelCost `yaml:"model_cost" json:"model_cost"`
+}
+
+// GeneralSettings mirrors litellm's general_settings block. A non-empty
+// MasterKey enables virtual-key auth; it also grants admin access to the
+// /key/* management endpoints and bypasses budget/model checks on data calls.
+type GeneralSettings struct {
+	MasterKey string `yaml:"master_key" json:"master_key"`
 }
 
 // RouterSettings mirrors litellm's router_settings block.

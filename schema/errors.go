@@ -181,6 +181,21 @@ func NewBadRequestError(message, provider, model string) error {
 	return newError(KindBadRequestError, 400, message, provider, model, "")
 }
 
+// NewAuthenticationError builds an AuthenticationError (401).
+func NewAuthenticationError(message, provider, model string) error {
+	return newError(KindAuthenticationError, 401, message, provider, model, "")
+}
+
+// NewPermissionDeniedError builds a PermissionDeniedError (403).
+func NewPermissionDeniedError(message, provider, model string) error {
+	return newError(KindPermissionDeniedError, 403, message, provider, model, "")
+}
+
+// NewRateLimitError builds a RateLimitError (429).
+func NewRateLimitError(message, provider, model string) error {
+	return newError(KindRateLimitError, 429, message, provider, model, "")
+}
+
 func isContextWindowMessage(lower string) bool {
 	patterns := []string{
 		"context window", "context length", "maximum context", "max tokens",

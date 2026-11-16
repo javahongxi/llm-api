@@ -9,6 +9,14 @@ server:
   host: 0.0.0.0
   port: 4000
 
+# General settings (mirrors litellm general_settings). Setting a master_key
+# enables virtual-key auth: data endpoints then require a proxy-issued key
+# (Authorization: Bearer <key>), and the master key administers /key/* and
+# /spend. Omit it to run in open mode (no auth). Supports os.environ/VAR.
+general_settings:
+  master_key: os.environ/LLM_API_MASTER_KEY
+  # master_key: sk-my-master-key
+
 # Router settings (mirrors litellm router_settings). Multiple model_list entries
 # sharing a model_name form one load-balanced group.
 router_settings:

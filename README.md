@@ -303,7 +303,8 @@ the file. Endpoints:
 - `POST /v1/chat/completions` (and `/chat/completions`) — supports `stream: true`
 - `POST /v1/embeddings` (and `/embeddings`)
 - `GET /v1/models` (and `/models`)
-- `GET /spend` — accumulated spend tracked by the router
+- `GET /spend` — accumulated spend tracked by the router (master key when auth on)
+- `POST /key/generate`, `POST /key/update`, `POST /key/delete`, `GET /key/info`, `GET /key/list` — virtual-key management (master key)
 - `GET /health`
 
 Point any OpenAI client at the gateway:
@@ -312,6 +313,60 @@ Point any OpenAI client at the gateway:
 curl http://localhost:4000/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"claude-sonnet","messages":[{"role":"user","content":"hi"}]}'
+```
+
+## Authentication & budgets
+
+The `auth` package is the Go analogue of litellm's proxy auth/budgets. Set a
+`master_key` in `general_settings` to enable virtual-key auth; without it the
+proxy runs in open mode (no auth, fully backward compatible).
+
+```yaml
+general_settings:
+  master_key: os.environ/LLM_API_MASTER_KEY   # or a literal sk-... key
+```
+
+When enabled, data endpoints require a proxy-issued key
+(`Authorization: Bearer <key>` or `x-api-key`). The master key bypasses all
+checks and administers the `/key/*` endpoints and `/spend`. Mint and manage keys
+with the master key:
+
+```bash
+# generate a key with a $10 budget, 60 rpm and a model allowlist
+curl http://localhost:4000/key/generate \
+  -H 'Authorization: Bearer sk-master' -H 'Content-Type: application/json' \
+  -d '{"key_alias":"team-a","max_budget":10,"rpm_limit":60,"models":["gpt-4o"]}'
+
+# call the gateway with the issued key
+curl http://localhost:4000/v1/chat/completions \
+  -H 'Authorization: Bearer sk-<issued>' -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Each key carries:
+
+- `max_budget` (USD) — enforced against accumulated per-key spend; exceeding it
+  returns a 400 `Budget has been exceeded` error. `budget_duration` optionally
+  resets spend on a rolling window.
+- `rpm_limit` / `tpm_limit` — sliding 60-second request/token rate limits (429).
+- `models` — allowlist of public model names (403 when not permitted; empty = all).
+- `duration` — key expiry (401 once expired).
+
+Spend is computed per call (see [Cost tracking](#cost-tracking)) and attributed
+to the calling key, so `/spend` reports a `spend_by_key` breakdown. Management
+endpoints: `POST /key/generate`, `POST /key/update`, `POST /key/delete`,
+`GET /key/info?key=...`, `GET /key/list`. Durations accept Go strings (`"24h"`,
+`"1h30m"`) or a number of seconds.
+
+Programmatic use:
+
+```go
+import "github.com/javahongxi/llm-api/auth"
+
+store := auth.NewStore("sk-master")
+key, _ := store.Generate(auth.GenerateRequest{MaxBudget: 10, RPMLimit: 60})
+k, err := store.Authorize(key.Token, "gpt-4o") // unified error on failure
+store.AddSpend(key.Token, 0.0025)
 ```
 
 ## Examples
@@ -339,7 +394,8 @@ providers/
 (root) llmapi      provider registry, model routing, HTTP orchestration, high-level API
 router/            load balancing, retries/backoff, cooldown, fallbacks, spend
 cost/              model price table, per-call cost, spend tracking
-proxy/             OpenAI-compatible gateway + config loader
+auth/              virtual API keys, budgets, rpm/tpm limits, model allowlists
+proxy/             OpenAI-compatible gateway + config loader + key management
 cmd/llm-api/       gateway binary
 ```
 
@@ -360,5 +416,6 @@ go test ./...   # unit tests use httptest; no real API calls
 This port covers the core calling surface — chat completion (with streaming),
 tool calling, embeddings and unified error mapping across the five providers
 above — plus the Router (load balancing, retries/backoff, cooldown and
-fallbacks) and cost tracking (per-call cost and accumulated spend). litellm's
-proxy auth/budgets remain out of scope for now.
+fallbacks), cost tracking (per-call cost and accumulated spend) and proxy
+auth/budgets (virtual keys, per-key spend/budget enforcement, rpm/tpm rate
+limits and model allowlists).

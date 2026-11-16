@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	llmapi "github.com/javahongxi/llm-api"
+	"github.com/javahongxi/llm-api/auth"
 	"github.com/javahongxi/llm-api/cost"
 	"github.com/javahongxi/llm-api/router"
 	"github.com/javahongxi/llm-api/schema"
@@ -14,9 +16,12 @@ import (
 
 // Server is the OpenAI-compatible proxy gateway. Requests are dispatched through
 // a router.Router, so model groups get load balancing, retries and fallbacks.
+// When a master key is configured, data endpoints require a virtual API key and
+// spend is tracked and budget-enforced per key.
 type Server struct {
 	cfg     *Config
 	router  *router.Router
+	keys    *auth.Store
 	handler http.Handler
 }
 
@@ -36,7 +41,11 @@ func New(cfg *Config) *Server {
 			Weight:            entry.Params.Weight,
 		})
 	}
-	s := &Server{cfg: cfg, router: router.New(deployments, cfg.Router.toRouter())}
+	s := &Server{
+		cfg:    cfg,
+		router: router.New(deployments, cfg.Router.toRouter()),
+		keys:   auth.NewStore(ResolveSecret(cfg.GeneralSettings.MasterKey)),
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChat)
@@ -47,6 +56,11 @@ func New(cfg *Config) *Server {
 	mux.HandleFunc("GET /models", s.handleModels)
 	mux.HandleFunc("GET /spend", s.handleSpend)
 	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("POST /key/generate", s.handleKeyGenerate)
+	mux.HandleFunc("POST /key/update", s.handleKeyUpdate)
+	mux.HandleFunc("POST /key/delete", s.handleKeyDelete)
+	mux.HandleFunc("GET /key/info", s.handleKeyInfo)
+	mux.HandleFunc("GET /key/list", s.handleKeyList)
 	s.handler = mux
 	return s
 }
@@ -89,10 +103,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "model not found in model_list: "+req.Model)
 		return
 	}
+	key, err := s.keys.Authorize(bearerToken(r), req.Model)
+	if err != nil {
+		writeLLMError(w, err)
+		return
+	}
 	opts := requestOptions(&req)
 
 	if req.Stream {
-		s.streamChat(w, r, req.Model, req.Messages, opts)
+		s.streamChat(w, r, req.Model, req.Messages, opts, key)
 		return
 	}
 	resp, err := s.router.Completion(r.Context(), req.Model, req.Messages, opts...)
@@ -100,10 +119,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeLLMError(w, err)
 		return
 	}
+	s.recordSpend(key, req.Model, resp.Cost, usageTotal(resp.Usage))
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, model string, messages []schema.Message, opts []llmapi.Option) {
+func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, model string, messages []schema.Message, opts []llmapi.Option, key *auth.Key) {
 	stream, err := s.router.CompletionStream(r.Context(), model, messages, opts...)
 	if err != nil {
 		writeLLMError(w, err)
@@ -117,8 +137,13 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, model string
 	w.WriteHeader(http.StatusOK)
 	flusher, _ := w.(http.Flusher)
 
+	var lastUsage *schema.Usage
 	for stream.Next() {
-		data, err := json.Marshal(stream.Current())
+		chunk := stream.Current()
+		if chunk.Usage != nil {
+			lastUsage = chunk.Usage
+		}
+		data, err := json.Marshal(chunk)
 		if err != nil {
 			continue
 		}
@@ -135,6 +160,41 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, model string
 	if flusher != nil {
 		flusher.Flush()
 	}
+	if lastUsage != nil {
+		s.recordSpend(key, model, cost.UsageCost(model, lastUsage), usageTotal(lastUsage))
+	}
+}
+
+// recordSpend attributes a call's cost and token usage to the calling virtual
+// key (when present) and to the router's per-key spend breakdown.
+func (s *Server) recordSpend(key *auth.Key, model string, amount float64, tokens int) {
+	if key == nil {
+		return
+	}
+	s.keys.AddSpend(key.Token, amount)
+	s.keys.AddTokens(key.Token, tokens)
+	s.router.SpendTracker().AddForKey(key.Token, model, amount)
+}
+
+func usageTotal(u *schema.Usage) int {
+	if u == nil {
+		return 0
+	}
+	if u.TotalTokens > 0 {
+		return u.TotalTokens
+	}
+	return u.PromptTokens + u.CompletionTokens
+}
+
+// bearerToken extracts the API key from Authorization: Bearer <key> or x-api-key.
+func bearerToken(r *http.Request) string {
+	if h := r.Header.Get("Authorization"); h != "" {
+		if rest, ok := strings.CutPrefix(h, "Bearer "); ok {
+			return strings.TrimSpace(rest)
+		}
+		return strings.TrimSpace(h)
+	}
+	return r.Header.Get("x-api-key")
 }
 
 // requestOptions translates the incoming request into SDK options. Backend
@@ -217,6 +277,11 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "model not found in model_list: "+req.Model)
 		return
 	}
+	key, err := s.keys.Authorize(bearerToken(r), req.Model)
+	if err != nil {
+		writeLLMError(w, err)
+		return
+	}
 	var opts []llmapi.Option
 	if req.Dimensions != nil {
 		opts = append(opts, llmapi.WithDimensions(*req.Dimensions))
@@ -232,6 +297,11 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeLLMError(w, err)
 		return
 	}
+	tokens := 0
+	if resp.Usage != nil {
+		tokens = resp.Usage.TotalTokens
+	}
+	s.recordSpend(key, req.Model, resp.Cost, tokens)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -251,7 +321,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleSpend reports accumulated spend tracked by the router (litellm /spend).
+// When auth is enabled it requires the master key.
 func (s *Server) handleSpend(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdmin(w, r) {
+		return
+	}
 	writeJSON(w, http.StatusOK, s.router.Spend())
 }
 
