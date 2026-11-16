@@ -9,7 +9,7 @@
 //	}, llmapi.WithAPIKey("sk-..."))
 //
 // Model names may carry a provider prefix ("anthropic/claude-3-5-sonnet-latest",
-// "gemini/gemini-1.5-pro", "deepseek/deepseek-chat", "dashscope/qwen-plus"), or
+// "gemini/gemini-1.5-pro", "deepseek/deepseek-v4-flash", "dashscope/qwen3.7-plus"), or
 // the provider is inferred from the model name, mirroring litellm's
 // get_llm_provider.
 package llmapi

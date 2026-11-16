@@ -55,14 +55,14 @@ model_list:
       model: gemini/gemini-1.5-pro
       api_key: os.environ/GEMINI_API_KEY
 
-  - model_name: deepseek-chat
+  - model_name: deepseek-v4-flash
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-v4-flash
       api_key: os.environ/DEEPSEEK_API_KEY
 
-  - model_name: qwen-plus
+  - model_name: qwen3.7-plus
     litellm_params:
-      model: dashscope/qwen-plus
+      model: dashscope/qwen3.7-plus
       api_key: os.environ/DASHSCOPE_API_KEY
 
   - model_name: text-embedding-3-small

@@ -68,8 +68,8 @@ Any provider works with the same call — just change the model string:
 ```go
 llmapi.Completion(ctx, "anthropic/claude-3-5-sonnet-latest", messages)
 llmapi.Completion(ctx, "gemini/gemini-1.5-pro", messages)
-llmapi.Completion(ctx, "deepseek/deepseek-chat", messages)
-llmapi.Completion(ctx, "dashscope/qwen-plus", messages)
+llmapi.Completion(ctx, "deepseek/deepseek-v4-flash", messages)
+llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages)
 ```
 
 ### Streaming
@@ -160,7 +160,7 @@ variables: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or
 
 > Note: a key only authenticates against its own provider. For example, a
 > DashScope key placed in `OPENAI_API_KEY` will not work against
-> `api.openai.com`; use `dashscope/qwen-plus`, or point `openai/...` at the
+> `api.openai.com`; use `dashscope/qwen3.7-plus`, or point `openai/...` at the
 > DashScope compatible-mode endpoint via `WithAPIBase`.
 
 ### Unified errors

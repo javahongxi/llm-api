@@ -56,11 +56,13 @@ var defaultPrices = map[string]ModelCost{
 	// DeepSeek
 	"deepseek-chat":     {2.8e-7, 4.2e-7},
 	"deepseek-reasoner": {5.5e-7, 2.19e-6},
+	"deepseek-v4-flash": {3e-7, 1.2e-6},
 
 	// DashScope
 	"qwen-plus":         {4e-7, 1.2e-6},
 	"qwen-turbo":        {5e-8, 2e-7},
 	"qwen-max":          {1.6e-6, 6.4e-6},
+	"qwen3.7-plus":      {4e-7, 1.2e-6},
 	"text-embedding-v3": {7e-8, 0},
 	"text-embedding-v4": {7e-8, 0},
 }

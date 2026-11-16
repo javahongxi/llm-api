@@ -21,7 +21,7 @@ func main() {
 	}
 
 	// Swap the model to try other providers, e.g. "anthropic/claude-3-5-sonnet-latest",
-	// "gemini/gemini-1.5-pro", "deepseek/deepseek-chat", "dashscope/qwen-plus".
+	// "gemini/gemini-1.5-pro", "deepseek/deepseek-v4-flash", "dashscope/qwen3.7-plus".
 	resp, err := llmapi.Completion(ctx, "gpt-4o", messages,
 		llmapi.WithTemperature(0.7),
 		llmapi.WithMaxTokens(256),
