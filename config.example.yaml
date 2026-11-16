@@ -1,0 +1,41 @@
+# llm-api proxy configuration (mirrors litellm proxy config.yaml).
+# Run: go run ./cmd/llm-api --config config.example.yaml
+#
+# Each entry maps a public model_name (what clients send) to backend
+# litellm_params. api_key supports "os.environ/VAR" to read an environment
+# variable, so secrets stay out of the file.
+
+server:
+  host: 0.0.0.0
+  port: 4000
+
+model_list:
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-latest
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: gemini-pro
+    litellm_params:
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: qwen-plus
+    litellm_params:
+      model: dashscope/qwen-plus
+      api_key: os.environ/DASHSCOPE_API_KEY
+
+  - model_name: text-embedding-3-small
+    litellm_params:
+      model: openai/text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
