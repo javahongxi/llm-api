@@ -223,6 +223,38 @@ resp, err := r.Completion(ctx, "gpt-4o", messages)
   `CooldownTime`.
 - **Fallbacks**: ordered group list tried when the primary group fails.
 
+## Cost tracking
+
+The `cost` package is the Go analogue of litellm's cost calculator and spend
+tracking. The SDK automatically computes a USD `cost` for every completion and
+embedding response from token usage and a model price table (0 for unknown
+models):
+
+```go
+resp, _ := llmapi.Completion(ctx, "gpt-4o", messages)
+fmt.Println(resp.Cost) // e.g. 3.5e-05 (USD)
+```
+
+Prices are USD per token. A built-in table covers common models; override or
+extend it programmatically:
+
+```go
+import "github.com/javahongxi/llm-api/cost"
+
+cost.Register("gpt-4o", cost.ModelCost{InputCostPerToken: 2.5e-6, OutputCostPerToken: 1e-5})
+unit := cost.Cost("gpt-4o", 1000, 500) // 0.0075
+```
+
+The Router accumulates spend across successful calls, broken down by model:
+
+```go
+report := r.Spend() // cost.SpendReport{TotalSpend, ByModel, ByKey}
+```
+
+The proxy exposes this at `GET /spend` and accepts a `model_cost` price table in
+its config. Spend can also be attributed to a caller key via
+`r.SpendTracker().AddForKey(key, model, amount)` (used by proxy auth/budgets).
+
 ## Proxy gateway
 
 The proxy exposes an OpenAI-compatible API and routes each public model name to
@@ -271,6 +303,7 @@ the file. Endpoints:
 - `POST /v1/chat/completions` (and `/chat/completions`) — supports `stream: true`
 - `POST /v1/embeddings` (and `/embeddings`)
 - `GET /v1/models` (and `/models`)
+- `GET /spend` — accumulated spend tracked by the router
 - `GET /health`
 
 Point any OpenAI client at the gateway:
@@ -304,7 +337,8 @@ providers/
   anthropic/       request/response transform + stateful stream decoder
   gemini/          request/response transform + stream + embeddings
 (root) llmapi      provider registry, model routing, HTTP orchestration, high-level API
-router/            load balancing, retries/backoff, cooldown, fallbacks
+router/            load balancing, retries/backoff, cooldown, fallbacks, spend
+cost/              model price table, per-call cost, spend tracking
 proxy/             OpenAI-compatible gateway + config loader
 cmd/llm-api/       gateway binary
 ```
@@ -326,5 +360,5 @@ go test ./...   # unit tests use httptest; no real API calls
 This port covers the core calling surface — chat completion (with streaming),
 tool calling, embeddings and unified error mapping across the five providers
 above — plus the Router (load balancing, retries/backoff, cooldown and
-fallbacks). litellm's cost tracking and proxy auth/budgets remain out of scope
-for now.
+fallbacks) and cost tracking (per-call cost and accumulated spend). litellm's
+proxy auth/budgets remain out of scope for now.

@@ -3,6 +3,7 @@ package llmapi
 import (
 	"context"
 
+	"github.com/javahongxi/llm-api/cost"
 	"github.com/javahongxi/llm-api/schema"
 )
 
@@ -62,7 +63,12 @@ func Completion(ctx context.Context, model string, messages []Message, opts ...O
 	if err != nil {
 		return nil, err
 	}
-	return p.ParseChat(resolvedModel, respBody)
+	resp, err := p.ParseChat(resolvedModel, respBody)
+	if err != nil {
+		return nil, err
+	}
+	resp.Cost = cost.UsageCost(resolvedModel, resp.Usage)
+	return resp, nil
 }
 
 // CompletionStream performs a streaming chat completion, returning a Stream of
@@ -115,7 +121,14 @@ func Embedding(ctx context.Context, model string, input any, opts ...Option) (*E
 	if err != nil {
 		return nil, err
 	}
-	return p.ParseEmbedding(resolvedModel, respBody)
+	resp, err := p.ParseEmbedding(resolvedModel, respBody)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Usage != nil {
+		resp.Cost = cost.Cost(resolvedModel, resp.Usage.PromptTokens, 0)
+	}
+	return resp, nil
 }
 
 func normalizeEmbeddingInput(input any) ([]string, error) {

@@ -12,15 +12,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/javahongxi/llm-api/cost"
 	"github.com/javahongxi/llm-api/router"
 	"gopkg.in/yaml.v3"
 )
 
 // Config is the proxy configuration (litellm proxy config.yaml shape).
 type Config struct {
-	ModelList []ModelEntry   `yaml:"model_list" json:"model_list"`
-	Server    ServerSettings `yaml:"server" json:"server"`
-	Router    RouterSettings `yaml:"router_settings" json:"router_settings"`
+	ModelList []ModelEntry              `yaml:"model_list" json:"model_list"`
+	Server    ServerSettings            `yaml:"server" json:"server"`
+	Router    RouterSettings            `yaml:"router_settings" json:"router_settings"`
+	ModelCost map[string]cost.ModelCost `yaml:"model_cost" json:"model_cost"`
 }
 
 // RouterSettings mirrors litellm's router_settings block.

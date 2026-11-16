@@ -100,6 +100,9 @@ type ModelResponse struct {
 	Choices           []Choice `json:"choices"`
 	Usage             *Usage   `json:"usage,omitempty"`
 	SystemFingerprint string   `json:"system_fingerprint,omitempty"`
+	// Cost is the computed USD cost of the call (0 when the model price is
+	// unknown), populated by the SDK like litellm's response_cost.
+	Cost float64 `json:"cost,omitempty"`
 }
 
 // Delta is the incremental content of a streaming choice.
@@ -173,6 +176,8 @@ type EmbeddingResponse struct {
 	Data   []EmbeddingData `json:"data"`
 	Model  string          `json:"model"`
 	Usage  *EmbeddingUsage `json:"usage,omitempty"`
+	// Cost is the computed USD cost of the call (0 when unknown).
+	Cost float64 `json:"cost,omitempty"`
 }
 
 // ModelInfo describes a single model in a model listing.

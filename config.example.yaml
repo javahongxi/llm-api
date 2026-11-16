@@ -23,6 +23,13 @@ router_settings:
   #   RateLimitErrorRetries: 5
   #   BadRequestErrorRetries: 0
 
+# Optional custom model prices (USD per token), overriding the built-in table.
+# Used to compute response cost and tracked spend (GET /spend).
+model_cost:
+  gpt-4o:
+    input_cost_per_token: 0.0000025
+    output_cost_per_token: 0.00001
+
 model_list:
   - model_name: gpt-4o
     litellm_params:

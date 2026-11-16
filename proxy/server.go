@@ -7,6 +7,7 @@ import (
 	"time"
 
 	llmapi "github.com/javahongxi/llm-api"
+	"github.com/javahongxi/llm-api/cost"
 	"github.com/javahongxi/llm-api/router"
 	"github.com/javahongxi/llm-api/schema"
 )
@@ -21,6 +22,9 @@ type Server struct {
 
 // New builds a Server from the configuration.
 func New(cfg *Config) *Server {
+	if len(cfg.ModelCost) > 0 {
+		cost.RegisterAll(cfg.ModelCost)
+	}
 	deployments := make([]router.Deployment, 0, len(cfg.ModelList))
 	for _, entry := range cfg.ModelList {
 		deployments = append(deployments, router.Deployment{
@@ -41,6 +45,7 @@ func New(cfg *Config) *Server {
 	mux.HandleFunc("POST /embeddings", s.handleEmbeddings)
 	mux.HandleFunc("GET /v1/models", s.handleModels)
 	mux.HandleFunc("GET /models", s.handleModels)
+	mux.HandleFunc("GET /spend", s.handleSpend)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	s.handler = mux
 	return s
@@ -243,6 +248,11 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+// handleSpend reports accumulated spend tracked by the router (litellm /spend).
+func (s *Server) handleSpend(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.router.Spend())
 }
 
 // --- response helpers ---

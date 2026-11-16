@@ -18,6 +18,7 @@ import (
 	"time"
 
 	llmapi "github.com/javahongxi/llm-api"
+	"github.com/javahongxi/llm-api/cost"
 	"github.com/javahongxi/llm-api/schema"
 )
 
@@ -112,6 +113,7 @@ func (s *Settings) applyDefaults() {
 type Router struct {
 	groups   map[string][]*deployment
 	settings Settings
+	spend    *cost.SpendTracker
 
 	mu  sync.Mutex
 	rng *rand.Rand
@@ -125,6 +127,7 @@ func New(deployments []Deployment, settings Settings) *Router {
 	r := &Router{
 		groups:   map[string][]*deployment{},
 		settings: settings,
+		spend:    cost.NewSpendTracker(),
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		rr:       map[string]uint64{},
 	}
@@ -150,12 +153,22 @@ func (r *Router) HasModel(name string) bool {
 	return ok
 }
 
+// Spend returns a snapshot of accumulated spend (USD) across successful calls.
+func (r *Router) Spend() cost.SpendReport { return r.spend.Report() }
+
+// SpendTracker exposes the underlying tracker for attributed spend recording.
+func (r *Router) SpendTracker() *cost.SpendTracker { return r.spend }
+
 // Completion routes a non-streaming chat completion through the model group,
 // retrying and falling back as configured.
 func (r *Router) Completion(ctx context.Context, model string, messages []llmapi.Message, opts ...llmapi.Option) (*llmapi.ModelResponse, error) {
-	return execute(r, ctx, model, opts, func(ctx context.Context, d *deployment, o []llmapi.Option) (*llmapi.ModelResponse, error) {
+	resp, err := execute(r, ctx, model, opts, func(ctx context.Context, d *deployment, o []llmapi.Option) (*llmapi.ModelResponse, error) {
 		return llmapi.Completion(ctx, d.Model, messages, o...)
 	})
+	if err == nil {
+		r.spend.Add(model, resp.Cost)
+	}
+	return resp, err
 }
 
 // CompletionStream routes a streaming chat completion. Retries apply while
@@ -169,9 +182,13 @@ func (r *Router) CompletionStream(ctx context.Context, model string, messages []
 
 // Embedding routes an embedding request through the model group.
 func (r *Router) Embedding(ctx context.Context, model string, input any, opts ...llmapi.Option) (*llmapi.EmbeddingResponse, error) {
-	return execute(r, ctx, model, opts, func(ctx context.Context, d *deployment, o []llmapi.Option) (*llmapi.EmbeddingResponse, error) {
+	resp, err := execute(r, ctx, model, opts, func(ctx context.Context, d *deployment, o []llmapi.Option) (*llmapi.EmbeddingResponse, error) {
 		return llmapi.Embedding(ctx, d.Model, input, o...)
 	})
+	if err == nil {
+		r.spend.Add(model, resp.Cost)
+	}
+	return resp, err
 }
 
 // execute runs the group -> fallback chain. For each group it retries up to the
