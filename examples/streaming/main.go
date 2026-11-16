@@ -20,7 +20,7 @@ func main() {
 		llmapi.UserMessage("写一首关于秋天的短诗。"),
 	}
 
-	stream, err := llmapi.CompletionStream(ctx, "gpt-4o", messages)
+	stream, err := llmapi.CompletionStream(ctx, "dashscope/qwen3.7-plus", messages)
 	if err != nil {
 		log.Fatal(err)
 	}

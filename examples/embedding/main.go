@@ -16,7 +16,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	resp, err := llmapi.Embedding(ctx, "text-embedding-3-small",
+	resp, err := llmapi.Embedding(ctx, "dashscope/text-embedding-v3",
 		[]string{"Hello world", "你好世界"},
 		llmapi.WithDimensions(256),
 	)

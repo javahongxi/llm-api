@@ -30,7 +30,7 @@ func main() {
 		llmapi.UserMessage("北京今天天气怎么样？"),
 	}
 
-	resp, err := llmapi.Completion(ctx, "gpt-4o", messages,
+	resp, err := llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages,
 		llmapi.WithTools(weatherTool),
 		llmapi.WithToolChoice("auto"),
 	)
@@ -52,7 +52,7 @@ func main() {
 		messages = append(messages, llmapi.ToolMessage(call.ID, result))
 	}
 
-	final, err := llmapi.Completion(ctx, "gpt-4o", messages, llmapi.WithTools(weatherTool))
+	final, err := llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages, llmapi.WithTools(weatherTool))
 	if err != nil {
 		log.Fatal(err)
 	}
