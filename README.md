@@ -14,13 +14,13 @@ It ships in two forms, mirroring litellm:
 
 ## Supported providers
 
-| Provider  | Prefix        | Chat | Stream | Tools | Embeddings | Default API base                                    |
-|-----------|---------------|:----:|:------:|:-----:|:----------:|-----------------------------------------------------|
-| OpenAI    | `openai/`     |  ✓   |   ✓    |   ✓   |     ✓      | `https://api.openai.com/v1`                         |
-| Anthropic | `anthropic/`  |  ✓   |   ✓    |   ✓   |     –      | `https://api.anthropic.com`                         |
-| Gemini    | `gemini/`     |  ✓   |   ✓    |   ✓   |     ✓      | `https://generativelanguage.googleapis.com`         |
-| DeepSeek  | `deepseek/`   |  ✓   |   ✓    |   ✓   |     –      | `https://api.deepseek.com/v1`                       |
-| DashScope | `dashscope/`  |  ✓   |   ✓    |   ✓   |     ✓      | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| Provider  | Prefix       | Chat | Stream | Tools | Embeddings | Default API base                                    |
+|-----------|--------------|:----:|:------:|:-----:|:----------:|-----------------------------------------------------|
+| OpenAI    | `openai/`    |  ✓  |   ✓   |  ✓   |     ✓     | `https://api.openai.com/v1`                         |
+| Anthropic | `anthropic/` |  ✓  |   ✓   |  ✓   |     –      | `https://api.anthropic.com`                         |
+| Gemini    | `gemini/`    |  ✓  |   ✓   |  ✓   |     ✓     | `https://generativelanguage.googleapis.com`         |
+| DeepSeek  | `deepseek/`  |  ✓  |   ✓   |  ✓   |     –      | `https://api.deepseek.com/v1`                       |
+| DashScope | `dashscope/` |  ✓  |   ✓   |  ✓   |     ✓     | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
 
 The provider is resolved like litellm's `get_llm_provider`: an explicit
 `WithProvider(...)` wins, then a `provider/model` prefix, then inference from the
@@ -187,6 +187,42 @@ Available helpers: `AsError`, `IsAuthentication`, `IsRateLimit`, `IsTimeout`,
 `IsContextWindowExceeded`, `IsContentPolicyViolation`, `IsServerError`,
 `IsRetryable`.
 
+## Router (retries / fallbacks / load balancing)
+
+The `router` package is the Go analogue of litellm's Router. Group multiple
+backend deployments under one public model name; calls are load-balanced across
+healthy deployments, retried on transient errors with exponential backoff, and
+fall back to other groups when a group is exhausted. Failing deployments are
+cooled down temporarily.
+
+```go
+import "github.com/javahongxi/llm-api/router"
+
+r := router.New([]router.Deployment{
+	{ModelName: "gpt-4o", Model: "openai/gpt-4o", APIKey: "os.environ/OPENAI_API_KEY"},
+	{ModelName: "gpt-4o", Model: "openai/gpt-4o", APIKey: "...", APIBase: "https://backup/v1", Weight: 2},
+	{ModelName: "claude", Model: "anthropic/claude-3-5-sonnet-latest", APIKey: "os.environ/ANTHROPIC_API_KEY"},
+}, router.Settings{
+	NumRetries: 3,
+	Strategy:   router.SimpleShuffle, // or RoundRobin / LeastBusy / LatencyBased
+	Timeout:    60 * time.Second,
+	Fallbacks:  map[string][]string{"gpt-4o": {"claude"}},
+})
+
+resp, err := r.Completion(ctx, "gpt-4o", messages)
+// r.CompletionStream(...) and r.Embedding(...) work the same way.
+```
+
+- **Strategies**: `simple-shuffle` (weighted random, default), `round-robin`,
+  `least-busy` (fewest in-flight), `latency-based-routing` (lowest observed
+  latency).
+- **Retries**: `NumRetries` applies to retryable errors (rate limit, timeout,
+  connection, 5xx). A `RetryPolicy` overrides the count per error class, mirroring
+  litellm (`RateLimitErrorRetries`, `BadRequestErrorRetries`, ...).
+- **Cooldown**: after `AllowedFails` failures a deployment is skipped for
+  `CooldownTime`.
+- **Fallbacks**: ordered group list tried when the primary group fails.
+
 ## Proxy gateway
 
 The proxy exposes an OpenAI-compatible API and routes each public model name to
@@ -208,6 +244,12 @@ server:
   host: 0.0.0.0
   port: 4000
 
+router_settings:
+  num_retries: 3
+  routing_strategy: simple-shuffle
+  fallbacks:
+    - gpt-4o: [claude-sonnet]
+
 model_list:
   - model_name: gpt-4o
     litellm_params:
@@ -218,6 +260,10 @@ model_list:
       model: anthropic/claude-3-5-sonnet-latest
       api_key: os.environ/ANTHROPIC_API_KEY
 ```
+
+Multiple `model_list` entries sharing a `model_name` form one load-balanced
+group; `router_settings` controls retries, strategy, cooldown and fallbacks
+(see [`config.example.yaml`](config.example.yaml)).
 
 `api_key`/`api_base` support `os.environ/VAR` references so secrets stay out of
 the file. Endpoints:
@@ -244,6 +290,7 @@ OPENAI_API_KEY=sk-... go run ./examples/completion
 OPENAI_API_KEY=sk-... go run ./examples/streaming
 OPENAI_API_KEY=sk-... go run ./examples/tools
 OPENAI_API_KEY=sk-... go run ./examples/embedding
+DASHSCOPE_API_KEY=... DEEPSEEK_API_KEY=... go run ./examples/router
 ```
 
 ## Architecture
@@ -257,6 +304,7 @@ providers/
   anthropic/       request/response transform + stateful stream decoder
   gemini/          request/response transform + stream + embeddings
 (root) llmapi      provider registry, model routing, HTTP orchestration, high-level API
+router/            load balancing, retries/backoff, cooldown, fallbacks
 proxy/             OpenAI-compatible gateway + config loader
 cmd/llm-api/       gateway binary
 ```
@@ -275,7 +323,8 @@ go test ./...   # unit tests use httptest; no real API calls
 
 ## Scope
 
-This port focuses on the core calling surface: chat completion (with streaming),
+This port covers the core calling surface — chat completion (with streaming),
 tool calling, embeddings and unified error mapping across the five providers
-above. litellm's Router (retries/fallbacks/load-balancing), cost tracking and
-proxy auth/budgets are out of scope for now.
+above — plus the Router (load balancing, retries/backoff, cooldown and
+fallbacks). litellm's cost tracking and proxy auth/budgets remain out of scope
+for now.

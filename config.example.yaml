@@ -9,11 +9,26 @@ server:
   host: 0.0.0.0
   port: 4000
 
+# Router settings (mirrors litellm router_settings). Multiple model_list entries
+# sharing a model_name form one load-balanced group.
+router_settings:
+  num_retries: 3
+  routing_strategy: simple-shuffle   # simple-shuffle | round-robin | least-busy | latency-based-routing
+  timeout: 60                        # seconds, per attempt
+  allowed_fails: 1                   # failures before a deployment is cooled down
+  cooldown_time: 5                   # seconds
+  fallbacks:
+    - gpt-4o: [claude-sonnet]        # try claude-sonnet if the gpt-4o group fails
+  # retry_policy:                    # optional per-error retry overrides
+  #   RateLimitErrorRetries: 5
+  #   BadRequestErrorRetries: 0
+
 model_list:
   - model_name: gpt-4o
     litellm_params:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
+      weight: 1                      # optional load-balancing weight
 
   - model_name: claude-sonnet
     litellm_params:

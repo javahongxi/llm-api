@@ -4,26 +4,35 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sort"
 	"time"
 
 	llmapi "github.com/javahongxi/llm-api"
+	"github.com/javahongxi/llm-api/router"
 	"github.com/javahongxi/llm-api/schema"
 )
 
-// Server is the OpenAI-compatible proxy gateway.
+// Server is the OpenAI-compatible proxy gateway. Requests are dispatched through
+// a router.Router, so model groups get load balancing, retries and fallbacks.
 type Server struct {
 	cfg     *Config
-	models  map[string]Params
+	router  *router.Router
 	handler http.Handler
 }
 
 // New builds a Server from the configuration.
 func New(cfg *Config) *Server {
-	s := &Server{cfg: cfg, models: map[string]Params{}}
+	deployments := make([]router.Deployment, 0, len(cfg.ModelList))
 	for _, entry := range cfg.ModelList {
-		s.models[entry.ModelName] = entry.Params
+		deployments = append(deployments, router.Deployment{
+			ModelName:         entry.ModelName,
+			Model:             entry.Params.Model,
+			APIKey:            entry.Params.APIKey,
+			APIBase:           entry.Params.APIBase,
+			CustomLLMProvider: entry.Params.CustomLLMProvider,
+			Weight:            entry.Params.Weight,
+		})
 	}
+	s := &Server{cfg: cfg, router: router.New(deployments, cfg.Router.toRouter())}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChat)
@@ -71,18 +80,17 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	params, ok := s.models[req.Model]
-	if !ok {
+	if !s.router.HasModel(req.Model) {
 		writeError(w, http.StatusNotFound, "model not found in model_list: "+req.Model)
 		return
 	}
-	opts := s.chatOptions(params, &req)
+	opts := requestOptions(&req)
 
 	if req.Stream {
-		s.streamChat(w, r, params, req.Messages, opts)
+		s.streamChat(w, r, req.Model, req.Messages, opts)
 		return
 	}
-	resp, err := llmapi.Completion(r.Context(), params.Model, req.Messages, opts...)
+	resp, err := s.router.Completion(r.Context(), req.Model, req.Messages, opts...)
 	if err != nil {
 		writeLLMError(w, err)
 		return
@@ -90,8 +98,8 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, params Params, messages []schema.Message, opts []llmapi.Option) {
-	stream, err := llmapi.CompletionStream(r.Context(), params.Model, messages, opts...)
+func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, model string, messages []schema.Message, opts []llmapi.Option) {
+	stream, err := s.router.CompletionStream(r.Context(), model, messages, opts...)
 	if err != nil {
 		writeLLMError(w, err)
 		return
@@ -124,9 +132,10 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, params Param
 	}
 }
 
-// chatOptions translates backend params + the incoming request into SDK options.
-func (s *Server) chatOptions(params Params, req *chatRequest) []llmapi.Option {
-	opts := baseOptions(params)
+// requestOptions translates the incoming request into SDK options. Backend
+// credentials/routing come from the router's deployment, not the request.
+func requestOptions(req *chatRequest) []llmapi.Option {
+	var opts []llmapi.Option
 	if req.Temperature != nil {
 		opts = append(opts, llmapi.WithTemperature(*req.Temperature))
 	}
@@ -169,21 +178,6 @@ func (s *Server) chatOptions(params Params, req *chatRequest) []llmapi.Option {
 	return opts
 }
 
-// baseOptions builds credential/routing options from backend params.
-func baseOptions(params Params) []llmapi.Option {
-	var opts []llmapi.Option
-	if key := ResolveSecret(params.APIKey); key != "" {
-		opts = append(opts, llmapi.WithAPIKey(key))
-	}
-	if base := ResolveSecret(params.APIBase); base != "" {
-		opts = append(opts, llmapi.WithAPIBase(base))
-	}
-	if params.CustomLLMProvider != "" {
-		opts = append(opts, llmapi.WithProvider(params.CustomLLMProvider))
-	}
-	return opts
-}
-
 func normalizeStop(stop any) []string {
 	switch v := stop.(type) {
 	case string:
@@ -214,12 +208,11 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
 		return
 	}
-	params, ok := s.models[req.Model]
-	if !ok {
+	if !s.router.HasModel(req.Model) {
 		writeError(w, http.StatusNotFound, "model not found in model_list: "+req.Model)
 		return
 	}
-	opts := baseOptions(params)
+	var opts []llmapi.Option
 	if req.Dimensions != nil {
 		opts = append(opts, llmapi.WithDimensions(*req.Dimensions))
 	}
@@ -229,7 +222,7 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	if req.User != "" {
 		opts = append(opts, llmapi.WithUser(req.User))
 	}
-	resp, err := llmapi.Embedding(r.Context(), params.Model, req.Input, opts...)
+	resp, err := s.router.Embedding(r.Context(), req.Model, req.Input, opts...)
 	if err != nil {
 		writeLLMError(w, err)
 		return
@@ -238,15 +231,9 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
-	names := make([]string, 0, len(s.models))
-	for name := range s.models {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
 	list := schema.ModelList{Object: "list"}
 	now := time.Now().Unix()
-	for _, name := range names {
+	for _, name := range s.router.Models() {
 		list.Data = append(list.Data, schema.ModelInfo{
 			ID: name, Object: "model", Created: now, OwnedBy: "llm-api",
 		})

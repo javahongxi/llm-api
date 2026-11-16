@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/javahongxi/llm-api/router"
 	"gopkg.in/yaml.v3"
 )
 
@@ -18,6 +20,43 @@ import (
 type Config struct {
 	ModelList []ModelEntry   `yaml:"model_list" json:"model_list"`
 	Server    ServerSettings `yaml:"server" json:"server"`
+	Router    RouterSettings `yaml:"router_settings" json:"router_settings"`
+}
+
+// RouterSettings mirrors litellm's router_settings block.
+type RouterSettings struct {
+	NumRetries      int                   `yaml:"num_retries" json:"num_retries"`
+	RoutingStrategy string                `yaml:"routing_strategy" json:"routing_strategy"`
+	Timeout         float64               `yaml:"timeout" json:"timeout"` // seconds, per attempt
+	AllowedFails    int                   `yaml:"allowed_fails" json:"allowed_fails"`
+	CooldownTime    float64               `yaml:"cooldown_time" json:"cooldown_time"` // seconds
+	RetryPolicy     *router.RetryPolicy   `yaml:"retry_policy" json:"retry_policy"`
+	Fallbacks       []map[string][]string `yaml:"fallbacks" json:"fallbacks"`
+}
+
+// toRouter converts the proxy router_settings into router.Settings.
+func (s RouterSettings) toRouter() router.Settings {
+	settings := router.Settings{
+		NumRetries:   s.NumRetries,
+		Strategy:     router.RoutingStrategy(s.RoutingStrategy),
+		AllowedFails: s.AllowedFails,
+		RetryPolicy:  s.RetryPolicy,
+	}
+	if s.Timeout > 0 {
+		settings.Timeout = time.Duration(s.Timeout * float64(time.Second))
+	}
+	if s.CooldownTime > 0 {
+		settings.CooldownTime = time.Duration(s.CooldownTime * float64(time.Second))
+	}
+	if len(s.Fallbacks) > 0 {
+		settings.Fallbacks = map[string][]string{}
+		for _, rule := range s.Fallbacks {
+			for model, targets := range rule {
+				settings.Fallbacks[model] = append(settings.Fallbacks[model], targets...)
+			}
+		}
+	}
+	return settings
 }
 
 // ServerSettings controls the listen address.
@@ -43,6 +82,8 @@ type Params struct {
 	APIBase string `yaml:"api_base" json:"api_base"`
 	// CustomLLMProvider optionally forces the backend provider.
 	CustomLLMProvider string `yaml:"custom_llm_provider" json:"custom_llm_provider"`
+	// Weight optionally biases simple-shuffle load balancing for this deployment.
+	Weight float64 `yaml:"weight" json:"weight"`
 }
 
 // LoadConfig reads a JSON or YAML config file (YAML for .yaml/.yml).
