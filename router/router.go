@@ -220,6 +220,13 @@ func execute[T any](r *Router, ctx context.Context, model string, opts []llmapi.
 	return zero, lastErr
 }
 
+// streamCleaner is implemented by lazily-consumed results (*llmapi.Stream) that
+// must run cleanup, such as cancelling the per-attempt context, once the caller
+// is done reading them.
+type streamCleaner interface {
+	OnClose(fns ...func())
+}
+
 // tryGroup attempts a single group with retries and backoff.
 func tryGroup[T any](r *Router, ctx context.Context, group string, deps []*deployment, opts []llmapi.Option, call func(context.Context, *deployment, []llmapi.Option) (T, error)) (T, error) {
 	var zero T
@@ -237,11 +244,20 @@ func tryGroup[T any](r *Router, ctx context.Context, group string, deps []*deplo
 		start := time.Now()
 		res, err := call(attemptCtx, d, merged)
 		r.end(d, time.Since(start), err)
+		if err == nil {
+			// Streaming results read their body lazily, so the per-attempt context
+			// (and its timeout) must stay alive until the caller closes the stream.
+			// Hand the cancel off to Stream.Close; cancel immediately for results
+			// that call() has already fully consumed (non-streaming).
+			if st, ok := any(res).(streamCleaner); ok && cancel != nil {
+				st.OnClose(cancel)
+			} else if cancel != nil {
+				cancel()
+			}
+			return res, nil
+		}
 		if cancel != nil {
 			cancel()
-		}
-		if err == nil {
-			return res, nil
 		}
 		lastErr = err
 

@@ -18,13 +18,21 @@ import (
 //	}
 //	if err := stream.Err(); err != nil { ... }
 type Stream struct {
-	resp    *http.Response
-	scanner *sse.Scanner
-	decoder schema.StreamDecoder
-	pending []*schema.ModelResponseStream
-	current *schema.ModelResponseStream
-	err     error
-	closed  bool
+	resp     *http.Response
+	scanner  *sse.Scanner
+	decoder  schema.StreamDecoder
+	pending  []*schema.ModelResponseStream
+	current  *schema.ModelResponseStream
+	err      error
+	closed   bool
+	cleanups []func()
+}
+
+// OnClose registers cleanup functions to run when the stream is closed. The
+// router uses this to cancel the per-attempt context only after a lazily-read
+// stream has been fully consumed, rather than as soon as it is returned.
+func (s *Stream) OnClose(fns ...func()) {
+	s.cleanups = append(s.cleanups, fns...)
 }
 
 func newStream(resp *http.Response, decoder schema.StreamDecoder) *Stream {
@@ -82,5 +90,10 @@ func (s *Stream) Close() error {
 		return nil
 	}
 	s.closed = true
-	return s.resp.Body.Close()
+	err := s.resp.Body.Close()
+	for _, f := range s.cleanups {
+		f()
+	}
+	s.cleanups = nil
+	return err
 }

@@ -264,6 +264,53 @@ func TestStreamRetry(t *testing.T) {
 	}
 }
 
+// TestStreamRespectsAttemptTimeout is a regression test for the bug where the
+// per-attempt context was cancelled as soon as CompletionStream returned,
+// aborting the lazily-read response body mid-stream with "context canceled".
+func TestStreamSurvivesAttemptTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		f, _ := w.(http.Flusher)
+		_, _ = io.WriteString(w, "data: "+`{"id":"1","choices":[{"index":0,"delta":{"content":"a"}}]}`+"\n\n")
+		if f != nil {
+			f.Flush()
+		}
+		// Second chunk arrives after the stream call has already returned, so the
+		// attempt context must still be alive when the client reads it.
+		time.Sleep(60 * time.Millisecond)
+		_, _ = io.WriteString(w, "data: "+`{"id":"1","choices":[{"index":0,"delta":{"content":"b"},"finish_reason":"stop"}]}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+		if f != nil {
+			f.Flush()
+		}
+	}))
+	defer srv.Close()
+
+	s := fastSettings()
+	s.Timeout = 2 * time.Second // generous: only the premature cancel could break this
+	r := New([]Deployment{dep("gpt", srv.URL)}, s)
+
+	stream, err := r.CompletionStream(context.Background(), "gpt", []llmapi.Message{llmapi.UserMessage("hi")})
+	if err != nil {
+		t.Fatalf("stream setup: %v", err)
+	}
+	defer stream.Close()
+	var content string
+	for stream.Next() {
+		if len(stream.Current().Choices) > 0 {
+			content += stream.Current().Choices[0].Delta.Content
+		}
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream should not error after attempt returns: %v", err)
+	}
+	if content != "ab" {
+		t.Errorf("expected full stream ab, got %q", content)
+	}
+}
+
 func TestEmbeddingRouting(t *testing.T) {
 	srv, _ := countingBackend(t, func(int32) (int, string) {
 		return http.StatusOK, `{"object":"list","data":[{"object":"embedding","embedding":[0.1,0.2],"index":0}],"model":"text-embedding-3-small","usage":{"prompt_tokens":1,"total_tokens":1}}`
