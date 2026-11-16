@@ -28,6 +28,11 @@ go.work.sum
 # env file
 .env
 
+# Local proxy config (copy config.example.yaml to config.yaml and edit it
+# freely; it may contain real keys, so it is kept out of version control)
+config.yaml
+config.json
+
 # Editor/IDE
 .idea/
 .vscode/

@@ -261,10 +261,21 @@ The proxy exposes an OpenAI-compatible API and routes each public model name to
 a configured backend, exactly like the litellm proxy.
 
 ```bash
+# Quickest: one-command start with the shipped template (export the provider
+# keys it references first; extra args are forwarded to the binary):
+#   ./run.sh  [--port 8080 --host 0.0.0.0 ...]
+
+# Start directly from the shipped template (no secrets in the file — all keys
+# are os.environ/VAR references):
 go run ./cmd/llm-api --config config.example.yaml
+
+# Or copy the template to your own config.yaml and edit it freely.
+# config.yaml is git-ignored, so real keys you put there stay out of git:
+cp config.example.yaml config.yaml
+LLM_API_MASTER_KEY=... OPENAI_API_KEY=... ./llm-api   # reads config.yaml by default
 # or build a binary:
 go build -o llm-api ./cmd/llm-api
-./llm-api --config config.yaml --port 4000
+./llm-api --config config.yaml
 ```
 
 Flags: `--config` (YAML or JSON, default `config.yaml`), `--port`, `--host`.
@@ -273,8 +284,8 @@ Configuration (`config.example.yaml`):
 
 ```yaml
 server:
-  host: 0.0.0.0
-  port: 4000
+  host: 127.0.0.1
+  port: 8888
 
 router_settings:
   num_retries: 3
@@ -310,7 +321,7 @@ the file. Endpoints:
 Point any OpenAI client at the gateway:
 
 ```bash
-curl http://localhost:4000/v1/chat/completions \
+curl http://localhost:8888/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"claude-sonnet","messages":[{"role":"user","content":"hi"}]}'
 ```
@@ -333,12 +344,12 @@ with the master key:
 
 ```bash
 # generate a key with a $10 budget, 60 rpm and a model allowlist
-curl http://localhost:4000/key/generate \
+curl http://localhost:8888/key/generate \
   -H 'Authorization: Bearer sk-master' -H 'Content-Type: application/json' \
   -d '{"key_alias":"team-a","max_budget":10,"rpm_limit":60,"models":["gpt-4o"]}'
 
 # call the gateway with the issued key
-curl http://localhost:4000/v1/chat/completions \
+curl http://localhost:8888/v1/chat/completions \
   -H 'Authorization: Bearer sk-<issued>' -H 'Content-Type: application/json' \
   -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}'
 ```
