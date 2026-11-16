@@ -291,17 +291,17 @@ router_settings:
   num_retries: 3
   routing_strategy: simple-shuffle
   fallbacks:
-    - gpt-4o: [claude-sonnet]
+    - gpt-4o: [qwen3.7-plus]
 
 model_list:
   - model_name: gpt-4o
     litellm_params:
       model: openai/gpt-4o
       api_key: os.environ/OPENAI_API_KEY
-  - model_name: claude-sonnet
+  - model_name: qwen3.7-plus
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-latest
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: dashscope/qwen3.7-plus
+      api_key: os.environ/DASHSCOPE_API_KEY
 ```
 
 Multiple `model_list` entries sharing a `model_name` form one load-balanced
@@ -323,7 +323,21 @@ Point any OpenAI client at the gateway:
 ```bash
 curl http://127.0.0.1:8888/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"claude-sonnet","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"qwen3.7-plus","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Streaming responses are returned as Server-Sent Events; pass `"stream": true`
+and disable curl buffering with `-N`:
+
+```bash
+curl -N http://127.0.0.1:8888/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"qwen3.7-plus","messages":[{"role":"user","content":"hi"}],"stream":true}'
+
+# data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":"Hi"},...}]}
+# data: {"object":"chat.completion.chunk","choices":[{"delta":{"content":" there"},...}]}
+# ...
+# data: [DONE]
 ```
 
 ## Authentication & budgets
