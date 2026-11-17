@@ -68,22 +68,25 @@ func (p *Provider) ChatRequest(model string, messages []schema.Message, c *schem
 	}
 
 	genConfig := map[string]any{}
-	if c.Temperature != nil {
+	// gemini-4 models reject the legacy sampling knobs (temperature/topP/topK/
+	// candidateCount) with a 400; drop them rather than fail the call.
+	sampling := !isGemini4(model)
+	if c.Temperature != nil && sampling {
 		genConfig["temperature"] = *c.Temperature
 	}
 	if maxTok := c.MaxOutputTokens(); maxTok > 0 {
 		genConfig["maxOutputTokens"] = maxTok
 	}
-	if c.TopP != nil {
+	if c.TopP != nil && sampling {
 		genConfig["topP"] = *c.TopP
 	}
-	if c.TopK != nil {
+	if c.TopK != nil && sampling {
 		genConfig["topK"] = *c.TopK
 	}
 	if len(c.Stop) > 0 {
 		genConfig["stopSequences"] = c.Stop
 	}
-	if c.N != nil {
+	if c.N != nil && sampling {
 		genConfig["candidateCount"] = *c.N
 	}
 	if c.ResponseFormat != nil {
@@ -106,6 +109,12 @@ func (p *Provider) ChatRequest(model string, messages []schema.Message, c *schem
 		body[k] = v
 	}
 	return body, nil
+}
+
+// isGemini4 reports whether the model belongs to the gemini-4 series, which
+// dropped support for sampling parameters in generationConfig.
+func isGemini4(model string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(model, "models/"), "gemini-4")
 }
 
 // convertMessages hoists system messages and converts the rest to Gemini

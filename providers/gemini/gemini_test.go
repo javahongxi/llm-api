@@ -32,6 +32,40 @@ func TestChatRequestContentsAndSystem(t *testing.T) {
 	}
 }
 
+func TestChatRequestGemini4DropsSampling(t *testing.T) {
+	p := New()
+	temp, topP := 0.7, 0.9
+	topK, n, maxTok := 40, 2, 100
+	c := &schema.CallConfig{Temperature: &temp, TopP: &topP, TopK: &topK, N: &n, MaxTokens: &maxTok}
+	body, err := p.ChatRequest("gemini-4-carbon", []schema.Message{schema.UserMessage("hi")}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gc := body.(map[string]any)["generationConfig"].(map[string]any)
+	for _, key := range []string{"temperature", "topP", "topK", "candidateCount"} {
+		if _, ok := gc[key]; ok {
+			t.Errorf("gemini-4 should drop %s, got %+v", key, gc)
+		}
+	}
+	if gc["maxOutputTokens"] != 100 {
+		t.Errorf("maxOutputTokens should be kept: %v", gc)
+	}
+}
+
+func TestChatRequestLegacyKeepsSampling(t *testing.T) {
+	p := New()
+	temp := 0.7
+	c := &schema.CallConfig{Temperature: &temp}
+	body, err := p.ChatRequest("gemini-1.5-pro", []schema.Message{schema.UserMessage("hi")}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gc := body.(map[string]any)["generationConfig"].(map[string]any)
+	if gc["temperature"] != 0.7 {
+		t.Errorf("legacy models should keep temperature: %v", gc)
+	}
+}
+
 func TestChatEndpoint(t *testing.T) {
 	p := New()
 	c := &schema.CallConfig{APIBase: "https://generativelanguage.googleapis.com"}
