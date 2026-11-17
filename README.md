@@ -51,7 +51,7 @@ import (
 )
 
 func main() {
-	resp, err := llmapi.Completion(context.Background(), "gpt-4o",
+	resp, err := llmapi.Completion(context.Background(), "gpt-6-astra",
 		[]llmapi.Message{llmapi.UserMessage("Hello!")},
 		llmapi.WithAPIKey("sk-..."), // or set OPENAI_API_KEY in the environment
 		llmapi.WithTemperature(0.7),
@@ -66,10 +66,10 @@ func main() {
 Any provider works with the same call — just change the model string:
 
 ```go
-llmapi.Completion(ctx, "anthropic/claude-3-5-sonnet-latest", messages)
-llmapi.Completion(ctx, "gemini/gemini-1.5-pro", messages)
+llmapi.Completion(ctx, "anthropic/claude-opus-5-5", messages)
+llmapi.Completion(ctx, "gemini/gemini-4-carbon", messages)
 llmapi.Completion(ctx, "deepseek/deepseek-v4-flash", messages)
-llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages)
+llmapi.Completion(ctx, "dashscope/qwen4-max", messages)
 ```
 
 ### Streaming
@@ -77,7 +77,7 @@ llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages)
 `CompletionStream` returns a `bufio.Scanner`-style iterator of unified chunks:
 
 ```go
-stream, err := llmapi.CompletionStream(ctx, "gpt-4o", messages)
+stream, err := llmapi.CompletionStream(ctx, "gpt-6-astra", messages)
 if err != nil {
 	panic(err)
 }
@@ -107,7 +107,7 @@ tools := []llmapi.Tool{
 	}),
 }
 
-resp, _ := llmapi.Completion(ctx, "gpt-4o",
+resp, _ := llmapi.Completion(ctx, "gpt-6-astra",
 	[]llmapi.Message{llmapi.UserMessage("Weather in Beijing?")},
 	llmapi.WithTools(tools...),
 	llmapi.WithToolChoice("auto"),
@@ -160,7 +160,7 @@ variables: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or
 
 > Note: a key only authenticates against its own provider. For example, a
 > DashScope key placed in `OPENAI_API_KEY` will not work against
-> `api.openai.com`; use `dashscope/qwen3.7-plus`, or point `openai/...` at the
+> `api.openai.com`; use `dashscope/qwen4-max`, or point `openai/...` at the
 > DashScope compatible-mode endpoint via `WithAPIBase`.
 
 ### Unified errors
@@ -199,17 +199,17 @@ cooled down temporarily.
 import "github.com/javahongxi/llm-api/router"
 
 r := router.New([]router.Deployment{
-	{ModelName: "gpt-4o", Model: "openai/gpt-4o", APIKey: "os.environ/OPENAI_API_KEY"},
-	{ModelName: "gpt-4o", Model: "openai/gpt-4o", APIKey: "...", APIBase: "https://backup/v1", Weight: 2},
-	{ModelName: "claude", Model: "anthropic/claude-3-5-sonnet-latest", APIKey: "os.environ/ANTHROPIC_API_KEY"},
+	{ModelName: "gpt-6-astra", Model: "openai/gpt-6-astra", APIKey: "os.environ/OPENAI_API_KEY"},
+	{ModelName: "gpt-6-astra", Model: "openai/gpt-6-astra", APIKey: "...", APIBase: "https://backup/v1", Weight: 2},
+	{ModelName: "claude", Model: "anthropic/claude-opus-5-5", APIKey: "os.environ/ANTHROPIC_API_KEY"},
 }, router.Settings{
 	NumRetries: 3,
 	Strategy:   router.SimpleShuffle, // or RoundRobin / LeastBusy / LatencyBased
 	Timeout:    60 * time.Second,
-	Fallbacks:  map[string][]string{"gpt-4o": {"claude"}},
+	Fallbacks:  map[string][]string{"gpt-6-astra": {"claude"}},
 })
 
-resp, err := r.Completion(ctx, "gpt-4o", messages)
+resp, err := r.Completion(ctx, "gpt-6-astra", messages)
 // r.CompletionStream(...) and r.Embedding(...) work the same way.
 ```
 
@@ -231,8 +231,8 @@ embedding response from token usage and a model price table (0 for unknown
 models):
 
 ```go
-resp, _ := llmapi.Completion(ctx, "gpt-4o", messages)
-fmt.Println(resp.Cost) // e.g. 3.5e-05 (USD)
+resp, _ := llmapi.Completion(ctx, "gpt-6-astra", messages)
+fmt.Println(resp.Cost) // e.g. 0.035 (USD)
 ```
 
 Prices are USD per token. A built-in table covers common models; override or
@@ -241,8 +241,8 @@ extend it programmatically:
 ```go
 import "github.com/javahongxi/llm-api/cost"
 
-cost.Register("gpt-4o", cost.ModelCost{InputCostPerToken: 2.5e-6, OutputCostPerToken: 1e-5})
-unit := cost.Cost("gpt-4o", 1000, 500) // 0.0075
+cost.Register("gpt-6-astra", cost.ModelCost{InputCostPerToken: 1e-5, OutputCostPerToken: 5e-5})
+unit := cost.Cost("gpt-6-astra", 1000, 500) // 0.035
 ```
 
 The Router accumulates spend across successful calls, broken down by model:
@@ -291,16 +291,16 @@ router_settings:
   num_retries: 3
   routing_strategy: simple-shuffle
   fallbacks:
-    - gpt-4o: [qwen3.7-plus]
+    - gpt-6-astra: [qwen4-max]
 
 model_list:
-  - model_name: gpt-4o
+  - model_name: gpt-6-astra
     litellm_params:
-      model: openai/gpt-4o
+      model: openai/gpt-6-astra
       api_key: os.environ/OPENAI_API_KEY
-  - model_name: qwen3.7-plus
+  - model_name: qwen4-max
     litellm_params:
-      model: dashscope/qwen3.7-plus
+      model: dashscope/qwen4-max
       api_key: os.environ/DASHSCOPE_API_KEY
 ```
 
@@ -323,7 +323,7 @@ Point any OpenAI client at the gateway:
 ```bash
 curl http://127.0.0.1:8888/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen3.7-plus","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"qwen4-max","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 Streaming responses are returned as Server-Sent Events; pass `"stream": true`
@@ -332,7 +332,7 @@ and disable curl buffering with `-N`:
 ```bash
 curl -N http://127.0.0.1:8888/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen3.7-plus","messages":[{"role":"user","content":"hi"}],"stream":true}'
+  -d '{"model":"qwen4-max","messages":[{"role":"user","content":"hi"}],"stream":true}'
 ```
 
 ## Authentication & budgets
@@ -355,12 +355,12 @@ with the master key:
 # generate a key with a $10 budget, 60 rpm and a model allowlist
 curl http://127.0.0.1:8888/key/generate \
   -H 'Authorization: Bearer sk-master' -H 'Content-Type: application/json' \
-  -d '{"key_alias":"team-a","max_budget":10,"rpm_limit":60,"models":["gpt-4o"]}'
+  -d '{"key_alias":"team-a","max_budget":10,"rpm_limit":60,"models":["gpt-6-astra"]}'
 
 # call the gateway with the issued key
 curl http://127.0.0.1:8888/v1/chat/completions \
   -H 'Authorization: Bearer sk-<issued>' -H 'Content-Type: application/json' \
-  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"hi"}]}'
+  -d '{"model":"gpt-6-astra","messages":[{"role":"user","content":"hi"}]}'
 ```
 
 Each key carries:
@@ -385,7 +385,7 @@ import "github.com/javahongxi/llm-api/auth"
 
 store := auth.NewStore("sk-master")
 key, _ := store.Generate(auth.GenerateRequest{MaxBudget: 10, RPMLimit: 60})
-k, err := store.Authorize(key.Token, "gpt-4o") // unified error on failure
+k, err := store.Authorize(key.Token, "gpt-6-astra") // unified error on failure
 store.AddSpend(key.Token, 0.0025)
 ```
 

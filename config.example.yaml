@@ -26,7 +26,7 @@ router_settings:
   allowed_fails: 1                   # failures before a deployment is cooled down
   cooldown_time: 5                   # seconds
   fallbacks:
-    - gpt-4o: [claude-sonnet]        # try claude-sonnet if the gpt-4o group fails
+    - gpt-6-astra: [claude-opus]       # try claude-opus if the gpt-6-astra group fails
   # retry_policy:                    # optional per-error retry overrides
   #   RateLimitErrorRetries: 5
   #   BadRequestErrorRetries: 0
@@ -34,25 +34,25 @@ router_settings:
 # Optional custom model prices (USD per token), overriding the built-in table.
 # Used to compute response cost and tracked spend (GET /spend).
 model_cost:
-  gpt-4o:
-    input_cost_per_token: 0.0000025
-    output_cost_per_token: 0.00001
+  gpt-6-astra:
+    input_cost_per_token: 0.00001
+    output_cost_per_token: 0.00005
 
 model_list:
-  - model_name: gpt-4o
+  - model_name: gpt-6-astra
     litellm_params:
-      model: openai/gpt-4o
+      model: openai/gpt-6-astra
       api_key: os.environ/OPENAI_API_KEY
       weight: 1                      # optional load-balancing weight
 
-  - model_name: claude-sonnet
+  - model_name: claude-opus
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-latest
+      model: anthropic/claude-opus-5-5
       api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: gemini-pro
     litellm_params:
-      model: gemini/gemini-1.5-pro
+      model: gemini/gemini-4-carbon
       api_key: os.environ/GEMINI_API_KEY
 
   - model_name: deepseek-v4-flash
@@ -60,9 +60,9 @@ model_list:
       model: deepseek/deepseek-v4-flash
       api_key: os.environ/DEEPSEEK_API_KEY
 
-  - model_name: qwen3.7-plus
+  - model_name: qwen4-max
     litellm_params:
-      model: dashscope/qwen3.7-plus
+      model: dashscope/qwen4-max
       api_key: os.environ/DASHSCOPE_API_KEY
 
   - model_name: text-embedding-3-small

@@ -24,6 +24,7 @@ type ModelCost struct {
 // Values are approximate public list prices and can be overridden via Register.
 var defaultPrices = map[string]ModelCost{
 	// OpenAI
+	"gpt-6-astra":            {1e-5, 5e-5},
 	"gpt-4o":                 {2.5e-6, 1e-5},
 	"gpt-4o-2024-08-06":      {2.5e-6, 1e-5},
 	"gpt-4o-2024-05-13":      {5e-6, 1.5e-5},
@@ -40,6 +41,8 @@ var defaultPrices = map[string]ModelCost{
 	"text-embedding-ada-002": {1e-7, 0},
 
 	// Anthropic
+	"claude-opus-5-5":            {4e-6, 2e-5},
+	"claude-fable-5-2":           {8e-6, 4e-5},
 	"claude-3-5-sonnet-latest":   {3e-6, 1.5e-5},
 	"claude-3-5-sonnet-20241022": {3e-6, 1.5e-5},
 	"claude-3-5-sonnet-20240620": {3e-6, 1.5e-5},
@@ -48,6 +51,7 @@ var defaultPrices = map[string]ModelCost{
 	"claude-3-haiku-20240307":    {2.5e-7, 1.25e-6},
 
 	// Gemini
+	"gemini-4-carbon":  {2e-6, 1e-5}, // intro price until 2026-11-30; then {4e-6, 2e-5}
 	"gemini-1.5-pro":   {1.25e-6, 5e-6},
 	"gemini-1.5-flash": {7.5e-8, 3e-7},
 	"gemini-2.0-flash": {1e-7, 4e-7},
@@ -63,6 +67,8 @@ var defaultPrices = map[string]ModelCost{
 	"qwen-turbo":        {5e-8, 2e-7},
 	"qwen-max":          {1.6e-6, 6.4e-6},
 	"qwen3.7-plus":      {4e-7, 1.2e-6},
+	"qwen4-max":         {1.5e-6, 4.5e-6}, // QwenCloud international list price
+	"qwen3.8-flash":     {1.5e-7, 4.7e-7}, // QwenCloud international list price
 	"text-embedding-v3": {7e-8, 0},
 	"text-embedding-v4": {7e-8, 0},
 }

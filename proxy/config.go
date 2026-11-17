@@ -83,8 +83,8 @@ type ModelEntry struct {
 
 // Params are the backend routing parameters (litellm litellm_params).
 type Params struct {
-	// Model is the SDK model string, e.g. "openai/gpt-4o",
-	// "anthropic/claude-3-5-sonnet-latest", "gemini/gemini-1.5-pro".
+	// Model is the SDK model string, e.g. "openai/gpt-6-astra",
+	// "anthropic/claude-opus-5-5", "gemini/gemini-4-carbon".
 	Model string `yaml:"model" json:"model"`
 	// APIKey is the credential; "os.environ/VAR" reads an environment variable.
 	APIKey string `yaml:"api_key" json:"api_key"`

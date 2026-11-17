@@ -20,9 +20,9 @@ func main() {
 		llmapi.UserMessage("用一句话介绍 Go 语言。"),
 	}
 
-	// Swap the model to try other providers, e.g. "anthropic/claude-3-5-sonnet-latest",
-	// "gemini/gemini-1.5-pro", "deepseek/deepseek-v4-flash", "dashscope/qwen3.7-plus".
-	resp, err := llmapi.Completion(ctx, "dashscope/qwen3.7-plus", messages,
+	// Swap the model to try other providers, e.g. "anthropic/claude-opus-5-5",
+	// "gemini/gemini-4-carbon", "deepseek/deepseek-v4-flash", "dashscope/qwen4-max".
+	resp, err := llmapi.Completion(ctx, "dashscope/qwen4-max", messages,
 		llmapi.WithTemperature(0.7),
 		llmapi.WithMaxTokens(256),
 	)

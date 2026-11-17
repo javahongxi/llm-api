@@ -37,7 +37,7 @@ func requireEnv(t *testing.T, key string) string {
 
 func TestRealDashScopeCompletion(t *testing.T) {
 	key := requireEnv(t, "DASHSCOPE_API_KEY")
-	resp, err := Completion(realCtx(t), "dashscope/qwen3.7-plus",
+	resp, err := Completion(realCtx(t), "dashscope/qwen4-max",
 		[]Message{UserMessage("Reply with exactly: OK")},
 		WithAPIKey(key), WithMaxTokens(20), WithTemperature(0))
 	if err != nil {
@@ -51,7 +51,7 @@ func TestRealDashScopeCompletion(t *testing.T) {
 
 func TestRealDashScopeStream(t *testing.T) {
 	key := requireEnv(t, "DASHSCOPE_API_KEY")
-	stream, err := CompletionStream(realCtx(t), "dashscope/qwen3.7-plus",
+	stream, err := CompletionStream(realCtx(t), "dashscope/qwen4-max",
 		[]Message{UserMessage("Count from 1 to 5, separated by spaces.")},
 		WithAPIKey(key), WithMaxTokens(40), WithTemperature(0))
 	if err != nil {
@@ -105,7 +105,7 @@ func TestRealDashScopeToolCalling(t *testing.T) {
 			},
 			"required": []string{"city"},
 		})}
-	resp, err := Completion(realCtx(t), "dashscope/qwen3.7-plus",
+	resp, err := Completion(realCtx(t), "dashscope/qwen4-max",
 		[]Message{UserMessage("What is the weather in Beijing? Use the get_weather tool.")},
 		WithAPIKey(key), WithTools(tools...), WithToolChoice("auto"), WithMaxTokens(200))
 	if err != nil {
@@ -167,7 +167,7 @@ func TestRealDeepSeekStream(t *testing.T) {
 // at DashScope, using OPENAI_API_KEY (which holds a DashScope key in this setup).
 func TestRealOpenAICompatViaDashScope(t *testing.T) {
 	key := requireEnv(t, "OPENAI_API_KEY")
-	resp, err := Completion(realCtx(t), "openai/qwen3.7-plus",
+	resp, err := Completion(realCtx(t), "openai/qwen4-max",
 		[]Message{UserMessage("Reply with exactly: OK")},
 		WithAPIKey(key), WithAPIBase(dashScopeBase), WithMaxTokens(20), WithTemperature(0))
 	if err != nil {

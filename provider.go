@@ -4,12 +4,12 @@
 // package resolves the provider, translates the request, and normalizes the
 // response and errors to a single shape.
 //
-//	resp, err := llmapi.Completion(ctx, "gpt-4o", []llmapi.Message{
+//	resp, err := llmapi.Completion(ctx, "gpt-6-astra", []llmapi.Message{
 //	    llmapi.UserMessage("Hello!"),
 //	}, llmapi.WithAPIKey("sk-..."))
 //
-// Model names may carry a provider prefix ("anthropic/claude-3-5-sonnet-latest",
-// "gemini/gemini-1.5-pro", "deepseek/deepseek-v4-flash", "dashscope/qwen3.7-plus"), or
+// Model names may carry a provider prefix ("anthropic/claude-opus-5-5",
+// "gemini/gemini-4-carbon", "deepseek/deepseek-v4-flash", "dashscope/qwen4-max"), or
 // the provider is inferred from the model name, mirroring litellm's
 // get_llm_provider.
 package llmapi

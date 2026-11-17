@@ -21,9 +21,9 @@ func main() {
 	// Two different backends behind the public name "chat"; round-robin spreads
 	// calls across them. If both fail, fall back to the "backup" group.
 	r := router.New([]router.Deployment{
-		{ModelName: "chat", Model: "dashscope/qwen3.7-plus", APIKey: "os.environ/DASHSCOPE_API_KEY"},
+		{ModelName: "chat", Model: "dashscope/qwen4-max", APIKey: "os.environ/DASHSCOPE_API_KEY"},
 		{ModelName: "chat", Model: "deepseek/deepseek-v4-flash", APIKey: "os.environ/DEEPSEEK_API_KEY"},
-		{ModelName: "backup", Model: "dashscope/qwen3.7-plus", APIKey: "os.environ/DASHSCOPE_API_KEY"},
+		{ModelName: "backup", Model: "dashscope/qwen3.8-flash", APIKey: "os.environ/DASHSCOPE_API_KEY"},
 	}, router.Settings{
 		NumRetries: 2,
 		Strategy:   router.RoundRobin,
